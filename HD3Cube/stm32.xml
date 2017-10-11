@@ -27,16 +27,9 @@
   </MCUProperties>
   <BSPSourceFolderName>Device-specific files</BSPSourceFolderName>
   <MCUMakFile>stm32.mak</MCUMakFile>
-  <ReferencedFrameworks>
-    <string>com.sysprogs.arm.stm32.hal</string>
-  </ReferencedFrameworks>
+  <ReferencedFrameworks />
   <FrameworkProperties>
-    <Entries>
-      <KeyValue>
-        <Key>com.sysprogs.bspoptions.stm32.hal_legacy</Key>
-        <Value />
-      </KeyValue>
-    </Entries>
+    <Entries />
   </FrameworkProperties>
   <TestFrameworkProperties>
     <Entries />

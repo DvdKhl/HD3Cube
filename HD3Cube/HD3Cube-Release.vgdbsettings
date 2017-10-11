@@ -128,8 +128,11 @@
     <ShowMessageAfterExecuting>true</ShowMessageAfterExecuting>
   </CustomShortcuts>
   <UserDefinedVariables />
+  <ImportedPropertySheets />
   <CodeSense>
     <Enabled>Unknown</Enabled>
+    <CFLAGS>-Wno-incompatible-pointer-types</CFLAGS>
+    <CXXFLAGS>-Wno-incompatible-pointer-types</CXXFLAGS>
     <ExtraSettings>
       <HideErrorsInSystemHeaders>true</HideErrorsInSystemHeaders>
     </ExtraSettings>

@@ -4,7 +4,7 @@
   * @author  MCD Application Team
   * @version V4.1.0
   * @date    29-April-2016
-  * @brief   CMSIS Cortex-M3 Device Peripheral Access Layer System Source File.
+  * @brief   CMSIS Cortex-M3 Device Peripheral Access Plane System Source File.
   * 
   * 1.  This file provides two functions and one global variable to be called from 
   *     user application:
@@ -75,7 +75,6 @@
   */
 
 #include "stm32f1xx.h"
-#include <stm32f1xx_hal.h>
 
 /**
   * @}
