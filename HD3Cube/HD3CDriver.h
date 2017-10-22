@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include "stm32f1xx.h"
 
 
@@ -19,13 +20,13 @@ typedef struct _HD3CDriver HD3CDriver;
 typedef uint8_t* (*HD3CDriverDataProviderDelegate)(HD3CDriver *d, void *tag);
 
 struct _HD3CDriver {
-	const uint8_t planeCount;
-	const uint8_t planeXLedCount;
-	const uint8_t planeYLedCount;
-	const uint16_t planeLedCount;
-	const uint16_t ledCount;
-	const uint8_t cubeFrequency;
-	const uint8_t ledPwmSteps;
+	uint8_t planeCount;
+	uint8_t planeXLedCount;
+	uint8_t planeYLedCount;
+	uint16_t planeLedCount;
+	uint16_t ledCount;
+	uint8_t cubeFrequency;
+	uint8_t ledPwmSteps;
 
 	void* _tag;
 	HD3CDriverDataProviderDelegate _getPlaneData;
@@ -34,11 +35,13 @@ struct _HD3CDriver {
 	uint8_t *_ledPwmData;
 	uint8_t *_ledData;
 	uint8_t *_ledBuffer;
+	volatile uint8_t _ledBufferState;
 };
 
 HD3CDriver *hd3cDriverCreate();
 int hd3cDriverInit(HD3CDriver *d);
-void hd3cDriverTick(HD3CDriver *d);
+void hd3cDriverPwmTick(HD3CDriver *d);
+void hd3cDriverPlaneTick(HD3CDriver *d);
 
 void hd3cDriverSetDataProvider(HD3CDriver *d, void *tag, HD3CDriverDataProviderDelegate getPlaneData);
 uint8_t hd3cDriverGetCurrentPlane(HD3CDriver *d);

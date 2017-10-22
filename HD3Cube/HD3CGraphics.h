@@ -1,7 +1,6 @@
 #pragma once
 
 #include <math.h>
-#include <string.h>
 #include "HD3CDriver.h"
 
 

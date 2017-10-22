@@ -1,43 +1,88 @@
 #include "HD3CDriver.h"
+#include "SWO.h"
 
 #define NOPDELAY asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop")
 
-#define PlaneClockSet() GPIOB->BSRR = GPIO_BSRR_BS6 
-#define PlaneLatchSet() GPIOB->BSRR = GPIO_BSRR_BS7 
-#define PlaneEnableSet() GPIOB->BSRR = GPIO_BSRR_BS8
-#define PlaneDataSet() GPIOB->BSRR = GPIO_BSRR_BS9
-#define PlaneClockReset() GPIOB->BSRR = GPIO_BSRR_BR6
-#define PlaneLatchReset() GPIOB->BSRR = GPIO_BSRR_BR7
+#define PlaneClockSet()    GPIOB->BSRR = GPIO_BSRR_BS6 
+#define PlaneLatchSet()    GPIOB->BSRR = GPIO_BSRR_BS7 
+#define PlaneEnableSet()   GPIOB->BSRR = GPIO_BSRR_BS8
+#define PlaneDataSet()     GPIOB->BSRR = GPIO_BSRR_BS9
+#define PlaneClockReset()  GPIOB->BSRR = GPIO_BSRR_BR6
+#define PlaneLatchReset()  GPIOB->BSRR = GPIO_BSRR_BR7
 #define PlaneEnableReset() GPIOB->BSRR = GPIO_BSRR_BR8 
-#define PlaneDataReset() GPIOB->BSRR = GPIO_BSRR_BR9 
+#define PlaneDataReset()   GPIOB->BSRR = GPIO_BSRR_BR9 
+
 #define PlaneData(data) GPIOB->BSRR = (data) ? GPIO_BSRR_BS9 : GPIO_BSRR_BR9
-#define PlaneStep() PlaneClockSet(); NOPDELAY; PlaneClockReset()
+#define PlaneStep()  PlaneClockSet(); NOPDELAY; PlaneClockReset()
 #define PlaneLatch() PlaneLatchSet(); NOPDELAY; PlaneLatchReset()
 
-#define LedClockSet() GPIOB->BSRR = 0x2000
-#define LedClockReset() GPIOB->BSRR = 0x20000000
-#define LedStep() LedClockSet(); NOPDELAY; LedClockReset()
-#define LedLatchSet() GPIOB->BSRR = 0x400
-#define LedLatchReset() GPIOB->BSRR = 0x4000000
-#define LedLatch() LedClockSet(); NOPDELAY; LedClockReset()
-#define LedData(data) GPIOB->BSRR = (data) ? 0x8000 : 0x80000000;
+
+#define LedClockSet()    GPIOB->BSRR = GPIO_BSRR_BS13
+#define LedClockReset()  GPIOB->BSRR = GPIO_BSRR_BR13
+#define LedLatchSet()    GPIOA->BSRR = GPIO_BSRR_BS10
+#define LedLatchReset()  GPIOA->BSRR = GPIO_BSRR_BR10
+#define LedEnableSet()   GPIOA->BSRR = GPIO_BSRR_BS9
+#define LedEnableReset() GPIOA->BSRR = GPIO_BSRR_BR9
+
+#define LedStep()  LedClockSet(); NOPDELAY; LedClockReset()
+#define LedLatch() LedLatchSet(); NOPDELAY; LedLatchReset()
+#define LedData(data) GPIOB->BSRR = (data) ? GPIO_BSRR_BS15 : GPIO_BSRR_BR15;
+
+
+void printLedBuffer(HD3CDriver *d) {
+	SWO_PrintString("DST:\n");
+	for (size_t p = 0; p < d->ledPwmSteps; p++) {
+		for (size_t i = 0; i < d->planeLedCount; i++) {
+			SWO_PrintChar(d->_ledBuffer[(p * d->planeLedCount >> 3) + (i >> 3)] & (1 << (i % 8)) ? '1' : '0');
+			if ((i % d->planeXLedCount) == 15) SWO_PrintChar('\n');
+		}
+		SWO_PrintString("\n");
+	}
+	SWO_PrintChar('\n');
+}
+
+void printPWMData(HD3CDriver *d) {
+	uint8_t *data = d->_getPlaneData(d, d->_tag);
+	
+	uint8_t hex[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+	SWO_PrintString("SRC:\n");
+	for (size_t y = 0; y < d->planeYLedCount; y++) {
+		for (size_t x = 0; x < d->planeXLedCount; x++) {
+			uint8_t val = data[x + y * d->planeXLedCount];
+			SWO_PrintChar(hex[(val >> 4) & 0xF]);
+			SWO_PrintChar(hex[val & 0xF]);
+			SWO_PrintChar(' ');
+		}
+		SWO_PrintChar('\n');
+	}
+	SWO_PrintChar('\n');
+}
+
 
 HD3CDriver* hd3cDriverCreate() {
 	HD3CDriver *d = (HD3CDriver*)calloc(1, sizeof(HD3CDriver));
-	*((uint8_t*)&d->planeCount) = 8;
-	*((uint8_t*)&d->planeXLedCount) = 8;
-	*((uint8_t*)&d->planeYLedCount) = 8;
-	*((uint16_t*)&d->planeLedCount) = d->planeXLedCount * d->planeYLedCount;
-	*((uint16_t*)&d->ledCount) = d->planeLedCount * d->planeCount;
-	*((uint8_t*)&d->cubeFrequency) = 100;
-	*((uint8_t*)&d->ledPwmSteps) = 8;
+	//*((uint8_t*)&d->planeCount) = 16;
+	//*((uint8_t*)&d->planeXLedCount) = 16;
+	//*((uint8_t*)&d->planeYLedCount) = 16;
+	//*((uint16_t*)&d->planeLedCount) = d->planeXLedCount * d->planeYLedCount;
+	//*((uint16_t*)&d->ledCount) = (uint16_t)d->planeLedCount * (uint16_t)d->planeCount;
+	//*((uint8_t*)&d->cubeFrequency) = 100;
+	//*((uint8_t*)&d->ledPwmSteps) = 32;
 	
-	d->_ledData = calloc(1, d->ledCount * d->ledPwmSteps / 8);
-	d->_ledBuffer = calloc(1, d->ledCount * d->ledPwmSteps / 8);
+	d->planeCount = 8;
+	d->planeXLedCount = 8;
+	d->planeYLedCount = 8;
+	d->planeLedCount = d->planeXLedCount * d->planeYLedCount;
+	d->ledCount = d->planeLedCount * d->planeCount;
+	d->cubeFrequency = 100;
+	d->ledPwmSteps = 64;
+	
+	d->_ledData = calloc(1, d->planeLedCount * d->ledPwmSteps / 8);
+	d->_ledBuffer = calloc(1, d->planeLedCount * d->ledPwmSteps / 8);
 	
 	return d;
 }
-void hd3cDriverTick(HD3CDriver *d);
+void hd3cDriverPwmTick(HD3CDriver *d);
 
 void hd3cDriverSetDataProvider(HD3CDriver *d, void *tag, HD3CDriverDataProviderDelegate getPlaneData) {
 	d->_tag = tag;
@@ -47,6 +92,8 @@ void hd3cDriverSetDataProvider(HD3CDriver *d, void *tag, HD3CDriverDataProviderD
 uint8_t hd3cDriverGetCurrentPlane(HD3CDriver *d) {
 	return d->_curPlane;
 }
+
+
 
 
 //## Private ##
@@ -68,26 +115,36 @@ void hd3cSysClockInit() {
 	RCC->CFGR |= RCC_CFGR_SW_PLL; //PLL as System Clock Source
 	while (!(RCC->CFGR & RCC_CFGR_SWS_PLL));
 }
-void hd3cPlaneInit() {
+void hd3cPlaneInit(HD3CDriver *d) {
 	PlaneEnableSet();
 	PlaneLatchReset();
 	PlaneClockReset();
 	PlaneDataSet();
-	for (size_t i = 0; i < 16; i++) {
-		PlaneStep();
-	}
-
-	PlaneDataReset();
-	for (size_t i = 0; i < 16; i++) {
-		PlaneData((i % 2) != 0);
+	for (size_t i = 0; i < d->planeCount; i++) {
 		PlaneStep();
 	}
 	PlaneLatch();
+}
+void hd3cDriverLedsInit(HD3CDriver *d) {
+	LedEnableReset();
+	LedLatchReset();
+	LedClockReset();
+	LedData(0);
+	for (size_t i = 0; i < d->planeLedCount; i++) {
+		LedStep();
+	}
+	LedLatch();
 }
 void hd3cPinInit() {
 	//Enable GPIO Ports A, B and C
 	RCC->APB2ENR |= RCC_APB2ENR_IOPAEN | RCC_APB2ENR_IOPBEN | RCC_APB2ENR_IOPCEN;
 
+	//Enable SPI2
+	RCC->APB1ENR |= RCC_APB1ENR_SPI2EN | RCC_APB2ENR_AFIOEN;
+
+	//Enable DMA1
+	RCC->AHBENR |= RCC_AHBENR_DMA1EN;
+	
 	//PA08: CNF(In NoPull) Mode(High) - LedDriver Data To MC
 	GPIOA->CRH = (GPIOA->CRH & ~(GPIO_CRH_CNF8 | GPIO_CRH_MODE8)) | GPIO_CRH_CNF8_0;
 	//PA09: CNF(Out OD) Mode(High)    - LedDriver Output Enable
@@ -105,13 +162,53 @@ void hd3cPinInit() {
 	GPIOB->CRH = (GPIOB->CRH & ~(GPIO_CRH_CNF8 | GPIO_CRH_MODE8)) | GPIO_CRH_CNF8_0 | GPIO_CRH_MODE8_0 | GPIO_CRH_MODE8_1;
 	//PB09: CNF(Out OD) Mode(High)    - PlaneDriver Data To Driver
 	GPIOB->CRH = (GPIOB->CRH & ~(GPIO_CRH_CNF9 | GPIO_CRH_MODE9)) | GPIO_CRH_CNF9_0 | GPIO_CRH_MODE9_0 | GPIO_CRH_MODE9_1;
-	//PB13: CNF(Out OD) Mode(High)    - LedDriver Clock
-	GPIOB->CRH = (GPIOB->CRH & ~(GPIO_CRH_CNF13 | GPIO_CRH_MODE13)) | GPIO_CRH_CNF13_0 | GPIO_CRH_MODE13_0 | GPIO_CRH_MODE13_1;
-	//PB15: CNF(Out OD) Mode(High)    - LedDriver Data To Driver
-	GPIOB->CRH = (GPIOB->CRH & ~(GPIO_CRH_CNF15 | GPIO_CRH_MODE15)) | GPIO_CRH_CNF15_0 | GPIO_CRH_MODE15_0 | GPIO_CRH_MODE15_1;
 
 	//PC13: CNF(Out PP) Mode(High)    - MC Led
 	GPIOC->CRH = (GPIOC->CRH & ~(GPIO_CRH_CNF13 | GPIO_CRH_MODE13)) | GPIO_CRH_MODE13_0 | GPIO_CRH_MODE13_1;
+	
+	//###########
+	//##  SPI  ##
+	//###########
+//	//PB13: CNF(Out OD) Mode(High)     - LedDriver Clock
+//	GPIOB->CRH = (GPIOB->CRH & ~(GPIO_CRH_CNF13 | GPIO_CRH_MODE13)) | GPIO_CRH_CNF13_0 | GPIO_CRH_MODE13_0 | GPIO_CRH_MODE13_1;
+//	//PB15: CNF(Out OD) Mode(High)     - LedDriver Data To Driver
+//	GPIOB->CRH = (GPIOB->CRH & ~(GPIO_CRH_CNF15 | GPIO_CRH_MODE15)) | GPIO_CRH_CNF15_0 | GPIO_CRH_MODE15_0 | GPIO_CRH_MODE15_1;
+
+	//PB13: CNF(AF OD) Mode(High)     - LedDriver Clock
+	GPIOB->CRH = (GPIOB->CRH & ~(GPIO_CRH_CNF13 | GPIO_CRH_MODE13)) | GPIO_CRH_CNF13_0 | GPIO_CRH_CNF13_1 | GPIO_CRH_MODE13_0 | GPIO_CRH_MODE13_1;
+	//PB15: CNF(AF OD) Mode(High)     - LedDriver Data To Driver
+	GPIOB->CRH = (GPIOB->CRH & ~(GPIO_CRH_CNF15 | GPIO_CRH_MODE15)) | GPIO_CRH_CNF15_0 | GPIO_CRH_CNF15_1 | GPIO_CRH_MODE15_0 | GPIO_CRH_MODE15_1;
+	
+	
+	SPI2->CR1 &= ~SPI_CR1_SPE; //Disable SPI2
+	SPI2->CR1 = SPI_CR1_MSTR | SPI_CR1_SSI; //Master mode
+	SPI2->CR1 |= SPI_CR1_CPHA; //SPI_PHASE_2EDGE
+	SPI2->CR1 |= SPI_CR1_CPOL; //SPI_POLARITY_HIGH
+	SPI2->CR1 |= SPI_CR1_DFF; //SPI_DATASIZE_16BIT
+	SPI2->CR1 |= SPI_CR1_SSM; //SPI_NSS_SOFT
+	//SPI2->CR1 |= SPI_CR1_BR_2 | SPI_CR1_BR_1 | SPI_CR1_BR_0; //SPI_BAUDRATEPRESCALER_256
+	//SPI2->CR1 |= SPI_CR1_BR_2 | SPI_CR1_BR_1; //SPI_BAUDRATEPRESCALER_128
+	//SPI2->CR1 |= SPI_CR1_BR_2 | SPI_CR1_BR_0; //SPI_BAUDRATEPRESCALER_64
+	//SPI2->CR1 |= SPI_CR1_BR_2; //SPI_BAUDRATEPRESCALER_32
+	//SPI2->CR1 |= SPI_CR1_BR_1 | SPI_CR1_BR_0; //SPI_BAUDRATEPRESCALER_16
+	SPI2->CR1 |= SPI_CR1_BR_1; //SPI_BAUDRATEPRESCALER_8
+	//SPI2->CR1 |= SPI_CR1_BR_0; //SPI_BAUDRATEPRESCALER_4
+	SPI2->SR |= SPI_SR_TXE; //Send Buffer ist empty
+	
+	
+	DMA1_Channel5->CCR &= ~DMA_CCR_EN;
+	NVIC_EnableIRQ(DMA1_Channel5_IRQn);
+	DMA1_Channel5->CCR = 
+		//DMA_CCR_MEM2MEM |
+		DMA_CCR_PL_0 | DMA_CCR_PL_1 | //Priority Very High
+		//DMA_CCR_MSIZE_0 | //16bit
+		//DMA_CCR_PSIZE_0 | //16bit
+		DMA_CCR_MINC | //Increment Memory
+		//DMA_CCR_PINC |
+		//DMA_CCR_CIRC |
+		DMA_CCR_DIR | //Read from Memory
+		DMA_CCR_TCIE | //Interrupt Complete enable
+		0;
 }
 void hd3cTimerInit() {
 	//	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
@@ -128,123 +225,119 @@ void hd3cTimerInit() {
 	TIM1->SR = 0;
 	TIM1->PSC = 0;
 	//TIM1->ARR = 704 * 2;
-	TIM1->ARR = 4500;
+	TIM1->ARR = 1000;
 	TIM1->CR1 = TIM_CR1_CEN; //Enable Counter
 	TIM1->DIER = TIM_DIER_UIE; //Enable Update Interrupt
 
 }
 int hd3cDriverInit(HD3CDriver *d) {
-	GPIOC->BSRR = GPIO_BSRR_BS13;
-
 	hd3cSysClockInit();
 	hd3cPinInit();
-	hd3cPlaneInit();
-
+	hd3cPlaneInit(d);
+	hd3cDriverLedsInit(d);
 	hd3cTimerInit();
-
-	/*
-	GPIO_InitStructure.GPIO_Pin = WIZ_SCLK | WIZ_MISO | WIZ_MOSI;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-	GPIO_InitStructure.GPIO_OType = GPIO_OType_OD;
-	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NONE;
-	GPIO_Init(GPIOA, &GPIO_InitStructure);
-	*/
-	/*
-	GPIO_InitStructure.GPIO_Pin = WIZ_SCS | WIZ_nRST;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-	GPIO_Init(GPIOA, &GPIO_InitStructure);
-	GPIO_SetBits(GPIOA, WIZ_SCS);
-	GPIO_SetBits(GPIOA, WIZ_nRST);
-
-	// Connect SPI pins to AF_SPI1
-	GPIO_PinAFConfig(GPIOA, GPIO_PinSource5, GPIO_AF_SPI1); //SCLK
-	GPIO_PinAFConfig(GPIOA, GPIO_PinSource7, GPIO_AF_SPI1); //MOSI
-	GPIO_PinAFConfig(GPIOA, GPIO_PinSource6, GPIO_AF_SPI1); //MISO
-	*/
-	/*
-	SPI_InitTypeDef SPI_InitStructure;
-	//SPI Config
-	SPI_InitStructure.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
-	SPI_InitStructure.SPI_Mode = SPI_Mode_Master;
-	SPI_InitStructure.SPI_DataSize = SPI_DataSize_8b;
-	SPI_InitStructure.SPI_CPOL = SPI_CPOL_Low;
-	SPI_InitStructure.SPI_CPHA = SPI_CPHA_1Edge;
-	SPI_InitStructure.SPI_NSS = SPI_NSS_Soft;
-	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_2;
-	SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
-	SPI_InitStructure.SPI_CRCPolynomial = 7;
-
-	SPI_Init(SPI1, &SPI_InitStructure);
-
-	while (SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_TXE) == RESET);
-	*/
-	/* Deinitialize DMA Streams
-	DMA_DeInit(DMA2_Stream3); //SPI1_TX_DMA_STREAM
-	DMA_DeInit(DMA2_Stream2); //SPI1_RX_DMA_STREAM
-	*/
-	/*
-	DMA_InitStructure.DMA_BufferSize = d->planeXLedCount * d->planeYLedCount;
-	DMA_InitStructure.DMA_FIFOMode = DMA_FIFOMode_Disable;
-	DMA_InitStructure.DMA_FIFOThreshold = DMA_FIFOThreshold_1QuarterFull;
-	DMA_InitStructure.DMA_MemoryBurst = DMA_MemoryBurst_Single;
-	DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_Byte;
-	DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
-	DMA_InitStructure.DMA_Mode = DMA_Mode_Normal;
-
-	//DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)(&(SPI1->DR));
-	DMA_InitStructure.DMA_PeripheralBurst = DMA_PeripheralBurst_Single;
-	DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;
-	DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_Byte;
-	DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
-	DMA_InitStructure.DMA_Priority = DMA_Priority_High;
-
-	//Configure Tx DMA
-	DMA_InitStructure.DMA_Channel = DMA_Channel_3;
-	DMA_InitStructure.DMA_DIR = DMA_DIR_MemoryToPeripheral;
-	DMA_InitStructure.DMA_Memory0BaseAddr = (uint32_t)pTmpBuf1;
-	DMA_Init(DMA2_Stream3, &DMA_InitStructure);
-
-	//Configure Rx DMA
-	DMA_InitStructure.DMA_Channel = DMA_Channel_3;
-	DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralToMemory;
-	DMA_InitStructure.DMA_Memory0BaseAddr = (uint32_t)pTmpBuf1;
-	DMA_Init(DMA2_Stream2, &DMA_InitStructure);
-	*/
-
 
 	return 0;
 }
 
-void hd3cDriverTick(HD3CDriver *d) {
-	LedLatch();
-	if(d->_curPwmStep == 0) PlaneLatch();
+void hd3cDriverLedDmaStart(HD3CDriver *d) {
+	DMA1_Channel5->CCR &= ~DMA_CCR_EN;
+	DMA1_Channel5->CNDTR = d->planeLedCount >> 3;
+	DMA1_Channel5->CPAR = (uint32_t)&SPI2->DR;
+	DMA1_Channel5->CMAR = (uint32_t)(d->_ledData + d->_curPwmStep * (d->planeLedCount >> 3));
+	DMA1_Channel5->CCR |= DMA_CCR_EN;
+	
+	SPI2->CR1 |= SPI_CR1_SPE; //Enable SPI2
+	SPI2->CR2 |= SPI_CR2_TXDMAEN;
 
+//	uint16_t *_ledData = d->_ledData + d->_curPwmStep * (d->planeLedCount >> 3);
+//	for (size_t i = 0; i < 4; i++) {
+//		//SPI2->DR = 0b0101010101010101;
+//		SPI2->DR = _ledData[i];
+//		while (!(SPI2->SR & SPI_SR_TXE));
+//	}
+//	while (SPI2->SR & SPI_SR_BSY);
+//
+//	SPI2->CR1 &= ~SPI_CR1_SPE; //Disable SPI2
+}
 
-	//TODO: SPI DMA
-	for (size_t i = 0; i < d->planeLedCount; i++) {
-		LedData(d->_ledData[i] > d->_curPwmStep);
-		LedStep();
+void hd3cDriverPlaneTick(HD3CDriver *d) {
+	if (d->_ledBufferState) return;
+	
+	d->_ledPwmData = d->_getPlaneData(d, d->_tag);
+
+	uint32_t *ledBuffer = d->_ledBuffer;
+	size_t ledBufferIntCount = (d->planeLedCount * d->ledPwmSteps) >> 5;
+	for (size_t i = 0; i < ledBufferIntCount; i++) {
+		ledBuffer[i] = 0;
+	}	
+	//memset(d->_ledBuffer, 0, (d->planeLedCount * d->ledPwmSteps) >> 3);
+	
+	size_t planeByteCount = d->planeLedCount >> 3;
+	for (size_t i = 0; i < d->planeLedCount; i += 8) {
+		size_t j = i >> 3;
+		d->_ledBuffer[(d->_ledPwmData[i + 0] * planeByteCount) + j] += 0x01;
+		d->_ledBuffer[(d->_ledPwmData[i + 1] * planeByteCount) + j] += 0x02;
+		d->_ledBuffer[(d->_ledPwmData[i + 2] * planeByteCount) + j] += 0x04;
+		d->_ledBuffer[(d->_ledPwmData[i + 3] * planeByteCount) + j] += 0x08;
+		d->_ledBuffer[(d->_ledPwmData[i + 4] * planeByteCount) + j] += 0x10;
+		d->_ledBuffer[(d->_ledPwmData[i + 5] * planeByteCount) + j] += 0x20;
+		d->_ledBuffer[(d->_ledPwmData[i + 6] * planeByteCount) + j] += 0x40;
+		d->_ledBuffer[(d->_ledPwmData[i + 7] * planeByteCount) + j] += 0x80;
 	}
+
+	asm("nop");
+	size_t planeLedIntCount = d->planeLedCount >> 5;
+	for (size_t j = planeLedIntCount; j < ledBufferIntCount; j += planeLedIntCount) {
+//		for (size_t i = 0; i < planeLedIntCount; i += 8) {
+//			ledBuffer[j + i + 0] += ledBuffer[j - planeLedIntCount + i + 0];
+//			ledBuffer[j + i + 1] += ledBuffer[j - planeLedIntCount + i + 1];
+//			ledBuffer[j + i + 2] += ledBuffer[j - planeLedIntCount + i + 2];
+//			ledBuffer[j + i + 3] += ledBuffer[j - planeLedIntCount + i + 3];
+//			ledBuffer[j + i + 4] += ledBuffer[j - planeLedIntCount + i + 4];
+//			ledBuffer[j + i + 5] += ledBuffer[j - planeLedIntCount + i + 5];
+//			ledBuffer[j + i + 6] += ledBuffer[j - planeLedIntCount + i + 6];
+//			ledBuffer[j + i + 7] += ledBuffer[j - planeLedIntCount + i + 7];
+//		}
+		for (size_t i = 0; i < planeLedIntCount; i += 2) {
+			ledBuffer[j + i + 0] += ledBuffer[j - planeLedIntCount + i + 0];
+			ledBuffer[j + i + 1] += ledBuffer[j - planeLedIntCount + i + 1];
+		}
+		
+	}
+	asm volatile("" : : : "memory");
+	d->_ledBufferState = 1;
+}
+
+void hd3cDriverPwmTickAsm(HD3CDriver *d) {
+	//asm(
+	//	""
+	//)
+}
+
+void hd3cDriverPwmTick(HD3CDriver *d) {
+	LedEnableSet();
+	//PlaneEnableReset();
+	LedLatch();
+	if (d->_curPwmStep == 0) {
+		PlaneLatch();
+	}
+	//PlaneEnableSet();
+	LedEnableReset();
+
 
 	d->_curPwmStep = (d->_curPwmStep + 1) % d->ledPwmSteps;
 	if (d->_curPwmStep == 0) {
-		if(d->_curPlane < 2) PlaneData(d->_curPlane == 0);
-		PlaneStep();
+		if (!d->_ledBufferState) GPIOC->BSRR = GPIO_BSRR_BR13;
+		
+		uint8_t *tmp = d->_ledData;
+		d->_ledData = d->_ledBuffer;
+		d->_ledBuffer = tmp;
 
-		d->_ledPwmData = d->_getPlaneData(d, d->_tag);
+		if (d->_curPlane < 2) PlaneData(d->_curPlane != 0);
 		d->_curPlane = (d->_curPlane + 1) % d->planeCount;
+		PlaneStep();
+		d->_ledBufferState = 0;
 	}
-
-	int byteCount = d->planeXLedCount * d->planeYLedCount / 8;
-	for (int i = 0; i < byteCount; i++) {
-		char data = 0;
-		for (int j = 0; j < 8; j++) {
-			data |= (d->_ledPwmData[i] > d->_curPwmStep ? 1 : 0) << j;
-		}
-		d->_ledData[i] = data;
-	}
+	hd3cDriverLedDmaStart(d);
 }
-
-

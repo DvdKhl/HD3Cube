@@ -28,9 +28,6 @@
     <ClCompile Include="system_stm32f1xx.c">
       <Filter>Source files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\Users\Arokh\AppData\Local\VisualGDB\EmbeddedBSPs\arm-eabi\com.sysprogs.arm.stm32\STM32F1xxxx\StartupFiles\startup_stm32f103xb.c">
-      <Filter>Source files\Device-specific files</Filter>
-    </ClCompile>
     <ClCompile Include="HD3CDriver.c">
       <Filter>Source files</Filter>
     </ClCompile>
@@ -45,6 +42,9 @@
     </ClCompile>
     <ClCompile Include="Main.c">
       <Filter>Source files</Filter>
+    </ClCompile>
+    <ClCompile Include="$(BSP_ROOT)\STM32F1xxxx\StartupFiles\startup_stm32f103xb.c">
+      <Filter>Source files\Device-specific files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -77,6 +77,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="HD3EffectWaterdrops.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="SWO.h">
       <Filter>Header files</Filter>
     </ClInclude>
   </ItemGroup>
