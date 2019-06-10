@@ -28,7 +28,7 @@ struct _HD3EffectWaterdrops {
 
 void hd3cEffectWaterdropsRandomize(HD3EffectWaterdrops *e) {
 	uint16_t dropSlotCount = e->areaX * e->areaY;
-	for (size_t i = 0; i <dropSlotCount; i++) {
+	for (size_t i = 0; i < dropSlotCount; i++) {
 		size_t j = rand() % dropSlotCount;
 		HD3EffectWaterdropsPos tmp = *(e->dropPermutation + i);
 		*(e->dropPermutation + i) = *(e->dropPermutation + j);
@@ -65,6 +65,23 @@ void hd3EffectWaterdropsTick(HD3EffectWaterdrops *e, uint8_t timeDelta) {
 }
 
 void hd3cEffectWaterdropsRender(HD3CRenderers *r, HD3EffectWaterdrops *e) {
+	hd3cGraphicsSetPixel(r->graphics, 0, 0, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 1, 0, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 2, 0, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 3, 0, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 4, 0, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 5, 0, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 6, 0, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 7, 0, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 0, 1, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 1, 1, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 2, 1, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 3, 1, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 4, 1, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 5, 1, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 6, 1, 0, 31);
+	hd3cGraphicsSetPixel(r->graphics, 7, 1, 0, 31);
+	return;
 	for (size_t i = 0; i < e->dropCount; i++) {
 		HD3EffectWaterdropsItem *drop = e->drops + i;
 
@@ -74,7 +91,7 @@ void hd3cEffectWaterdropsRender(HD3CRenderers *r, HD3EffectWaterdrops *e) {
 
 		if (!hd3cGraphicsWithinBounds(r->graphics, x, y, z)) continue;
 
-		hd3cGraphicsSetPixel(r->graphics, (uint8_t)x, (uint8_t)y, (uint8_t)z, 9);
-		hd3cGraphicsSetPixel(r->graphics, (uint8_t)x, (uint8_t)y, (uint8_t)z + 1, 9);
+		hd3cGraphicsSetPixel(r->graphics, (uint8_t)x, (uint8_t)y, (uint8_t)z, 31);
+		hd3cGraphicsSetPixel(r->graphics, (uint8_t)x, (uint8_t)y, (uint8_t)z + 1, 31);
 	}
 }

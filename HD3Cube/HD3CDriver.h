@@ -41,7 +41,8 @@ struct _HD3CDriver {
 HD3CDriver *hd3cDriverCreate();
 int hd3cDriverInit(HD3CDriver *d);
 void hd3cDriverPwmTick(HD3CDriver *d);
-void hd3cDriverPlaneTick(HD3CDriver *d);
+uint8_t hd3cDriverPlaneTick(HD3CDriver *d);
 
 void hd3cDriverSetDataProvider(HD3CDriver *d, void *tag, HD3CDriverDataProviderDelegate getPlaneData);
 uint8_t hd3cDriverGetCurrentPlane(HD3CDriver *d);
+void hd3cDriverStart(HD3CDriver *d);

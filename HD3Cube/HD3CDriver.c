@@ -1,5 +1,6 @@
 #include "HD3CDriver.h"
-#include "SWO.h"
+
+#define DMA
 
 #define NOPDELAY asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop"); asm("nop")
 
@@ -29,36 +30,6 @@
 #define LedData(data) GPIOB->BSRR = (data) ? GPIO_BSRR_BS15 : GPIO_BSRR_BR15;
 
 
-void printLedBuffer(HD3CDriver *d) {
-	SWO_PrintString("DST:\n");
-	for (size_t p = 0; p < d->ledPwmSteps; p++) {
-		for (size_t i = 0; i < d->planeLedCount; i++) {
-			SWO_PrintChar(d->_ledBuffer[(p * d->planeLedCount >> 3) + (i >> 3)] & (1 << (i % 8)) ? '1' : '0');
-			if ((i % d->planeXLedCount) == 15) SWO_PrintChar('\n');
-		}
-		SWO_PrintString("\n");
-	}
-	SWO_PrintChar('\n');
-}
-
-void printPWMData(HD3CDriver *d) {
-	uint8_t *data = d->_getPlaneData(d, d->_tag);
-	
-	uint8_t hex[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
-	SWO_PrintString("SRC:\n");
-	for (size_t y = 0; y < d->planeYLedCount; y++) {
-		for (size_t x = 0; x < d->planeXLedCount; x++) {
-			uint8_t val = data[x + y * d->planeXLedCount];
-			SWO_PrintChar(hex[(val >> 4) & 0xF]);
-			SWO_PrintChar(hex[val & 0xF]);
-			SWO_PrintChar(' ');
-		}
-		SWO_PrintChar('\n');
-	}
-	SWO_PrintChar('\n');
-}
-
-
 HD3CDriver* hd3cDriverCreate() {
 	HD3CDriver *d = (HD3CDriver*)calloc(1, sizeof(HD3CDriver));
 	//*((uint8_t*)&d->planeCount) = 16;
@@ -75,7 +46,7 @@ HD3CDriver* hd3cDriverCreate() {
 	d->planeLedCount = d->planeXLedCount * d->planeYLedCount;
 	d->ledCount = d->planeLedCount * d->planeCount;
 	d->cubeFrequency = 100;
-	d->ledPwmSteps = 64;
+	d->ledPwmSteps = 32;
 	
 	d->_ledData = calloc(1, d->planeLedCount * d->ledPwmSteps / 8);
 	d->_ledBuffer = calloc(1, d->planeLedCount * d->ledPwmSteps / 8);
@@ -196,6 +167,7 @@ void hd3cPinInit() {
 	SPI2->SR |= SPI_SR_TXE; //Send Buffer ist empty
 	
 	
+#ifdef DMA
 	DMA1_Channel5->CCR &= ~DMA_CCR_EN;
 	NVIC_EnableIRQ(DMA1_Channel5_IRQn);
 	DMA1_Channel5->CCR = 
@@ -209,6 +181,7 @@ void hd3cPinInit() {
 		DMA_CCR_DIR | //Read from Memory
 		DMA_CCR_TCIE | //Interrupt Complete enable
 		0;
+#endif
 }
 void hd3cTimerInit() {
 	//	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
@@ -223,11 +196,14 @@ void hd3cTimerInit() {
 	RCC->APB2ENR |= RCC_APB2ENR_TIM1EN;
 	NVIC_EnableIRQ(TIM1_UP_IRQn);
 	TIM1->SR = 0;
-	TIM1->PSC = 0;
-	//TIM1->ARR = 704 * 2;
-	TIM1->ARR = 1000;
+#ifdef DMA
+	TIM1->PSC = 64;
+	TIM1->ARR = 40000;
+#else
+	TIM1->PSC = 128;
+	TIM1->ARR = 60000;
+#endif
 	TIM1->CR1 = TIM_CR1_CEN; //Enable Counter
-	TIM1->DIER = TIM_DIER_UIE; //Enable Update Interrupt
 
 }
 int hd3cDriverInit(HD3CDriver *d) {
@@ -237,10 +213,19 @@ int hd3cDriverInit(HD3CDriver *d) {
 	hd3cDriverLedsInit(d);
 	hd3cTimerInit();
 
+	//PlaneData(0);
+	//PlaneStep();
+	
+	
 	return 0;
 }
 
+void hd3cDriverStart(HD3CDriver *d) {
+	TIM1->DIER = TIM_DIER_UIE; //Enable Update Interrupt
+}
+
 void hd3cDriverLedDmaStart(HD3CDriver *d) {
+#ifdef DMA
 	DMA1_Channel5->CCR &= ~DMA_CCR_EN;
 	DMA1_Channel5->CNDTR = d->planeLedCount >> 3;
 	DMA1_Channel5->CPAR = (uint32_t)&SPI2->DR;
@@ -249,20 +234,24 @@ void hd3cDriverLedDmaStart(HD3CDriver *d) {
 	
 	SPI2->CR1 |= SPI_CR1_SPE; //Enable SPI2
 	SPI2->CR2 |= SPI_CR2_TXDMAEN;
+#else
+	SPI2->CR1 |= SPI_CR1_SPE; //Enable SPI2
 
-//	uint16_t *_ledData = d->_ledData + d->_curPwmStep * (d->planeLedCount >> 3);
-//	for (size_t i = 0; i < 4; i++) {
-//		//SPI2->DR = 0b0101010101010101;
-//		SPI2->DR = _ledData[i];
-//		while (!(SPI2->SR & SPI_SR_TXE));
-//	}
-//	while (SPI2->SR & SPI_SR_BSY);
-//
-//	SPI2->CR1 &= ~SPI_CR1_SPE; //Disable SPI2
+	uint8_t *_ledData = d->_ledData + d->_curPwmStep * (d->planeLedCount >> 3);
+	for (size_t i = 0; i < 8; i++) {
+		//SPI2->DR = 0b0101010101010101;
+		SPI2->DR = _ledData[i];
+		while (!(SPI2->SR & SPI_SR_TXE));
+	}
+	while (SPI2->SR & SPI_SR_BSY);
+
+	SPI2->CR1 &= ~SPI_CR1_SPE; //Disable SPI2
+#endif
 }
 
-void hd3cDriverPlaneTick(HD3CDriver *d) {
-	if (d->_ledBufferState) return;
+uint8_t hd3cDriverPlaneTick(HD3CDriver *d) {
+	if (d->_ledBufferState) return 0;
+
 	
 	d->_ledPwmData = d->_getPlaneData(d, d->_tag);
 
@@ -286,9 +275,9 @@ void hd3cDriverPlaneTick(HD3CDriver *d) {
 		d->_ledBuffer[(d->_ledPwmData[i + 7] * planeByteCount) + j] += 0x80;
 	}
 
-	asm("nop");
+
 	size_t planeLedIntCount = d->planeLedCount >> 5;
-	for (size_t j = planeLedIntCount; j < ledBufferIntCount; j += planeLedIntCount) {
+	for (int j = ledBufferIntCount - planeLedIntCount; j >= planeLedIntCount; j -= planeLedIntCount) {
 //		for (size_t i = 0; i < planeLedIntCount; i += 8) {
 //			ledBuffer[j + i + 0] += ledBuffer[j - planeLedIntCount + i + 0];
 //			ledBuffer[j + i + 1] += ledBuffer[j - planeLedIntCount + i + 1];
@@ -299,14 +288,17 @@ void hd3cDriverPlaneTick(HD3CDriver *d) {
 //			ledBuffer[j + i + 6] += ledBuffer[j - planeLedIntCount + i + 6];
 //			ledBuffer[j + i + 7] += ledBuffer[j - planeLedIntCount + i + 7];
 //		}
-		for (size_t i = 0; i < planeLedIntCount; i += 2) {
-			ledBuffer[j + i + 0] += ledBuffer[j - planeLedIntCount + i + 0];
-			ledBuffer[j + i + 1] += ledBuffer[j - planeLedIntCount + i + 1];
+		
+		
+		for (int i = planeLedIntCount - 2; i >= 0; i -= 2) {
+			ledBuffer[j - planeLedIntCount + i + 0] += ledBuffer[j + i + 0];
+			ledBuffer[j - planeLedIntCount + i + 1] += ledBuffer[j + i + 1];
 		}
 		
 	}
 	asm volatile("" : : : "memory");
 	d->_ledBufferState = 1;
+	return 1;
 }
 
 void hd3cDriverPwmTickAsm(HD3CDriver *d) {
@@ -316,15 +308,14 @@ void hd3cDriverPwmTickAsm(HD3CDriver *d) {
 }
 
 void hd3cDriverPwmTick(HD3CDriver *d) {
-	LedEnableSet();
+	//LedEnableSet();
 	//PlaneEnableReset();
-	LedLatch();
 	if (d->_curPwmStep == 0) {
 		PlaneLatch();
 	}
+	LedLatch();
 	//PlaneEnableSet();
-	LedEnableReset();
-
+	//LedEnableReset();
 
 	d->_curPwmStep = (d->_curPwmStep + 1) % d->ledPwmSteps;
 	if (d->_curPwmStep == 0) {
@@ -338,6 +329,6 @@ void hd3cDriverPwmTick(HD3CDriver *d) {
 		d->_curPlane = (d->_curPlane + 1) % d->planeCount;
 		PlaneStep();
 		d->_ledBufferState = 0;
-	}
-	hd3cDriverLedDmaStart(d);
+	} 
+	if(d->_curPwmStep < 32) 	hd3cDriverLedDmaStart(d);
 }
